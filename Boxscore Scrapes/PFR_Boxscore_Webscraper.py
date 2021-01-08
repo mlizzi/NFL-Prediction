@@ -12,15 +12,18 @@ import pandas as pd
 
 def extractBoxscoreLinks(seasonStartYear):
 	'''
-	The script reads the years/{yearNum}/games.htm page on PFR and iterates over the Week-by-Week table to extract
-	 the boxscore links. Links are returned as follows:
-	 :return: weekByWeek = {link1: {statName1: statVal1, statName2: statVal2}}
+	The script reads the years/{seasonStartYear}/games.htm page on PFR and iterates over the Week-by-Week table
+	to extract the boxscore links.
+	 seasonStartYear: year in which the season started. The year for a game may be different than this if a game
+	 				  (usually playoffs) is played in the following year. This is accounted for and noted in the code.
+
+
+	 :return: weekByWeek = {link1: {statName1: statVal1, ...} }
 	 where
 	 link1: suffix of link to PRF webpage (can access page by appending to http://www.pro-football-reference.com/)
 	 statName#: stat extracted from Week-by-Week table
 	 statVal#: value of stat
 	'''
-	# First, we iterate over the years/{yearNum}/games.htm page on PFR to extract all links to boxscores
 
 	# Read games page for specified year from pro-football-reference with soup
 	result = requests.get('http://www.pro-football-reference.com/years/{0}/games.htm'.format(seasonStartYear))
@@ -41,7 +44,6 @@ def extractBoxscoreLinks(seasonStartYear):
 
 	# Iterate over each row in table
 	for row in rows:
-
 		# Extract hyperlink to game data.
 		gameLink = row.find(attrs={'data-stat': 'boxscore_word'}).find('a')
 
@@ -52,8 +54,7 @@ def extractBoxscoreLinks(seasonStartYear):
 			gameLink = gameLink['href']
 
 		# Extract year, week, date, winner, and loser from row
-		# (Note year may not match input year since
-		year = gameLink.split('/')[2][:4]
+		year = gameLink.split('/')[2][:4] # Extracts from gameLink to ensure proper year is used
 		week = row.find(attrs={'data-stat': 'week_num'}).text
 		date = row.find(attrs={'data-stat': 'game_date'}).text
 		winner = row.find(attrs={'data-stat': 'winner'}).text
@@ -104,7 +105,6 @@ def extractAllBoxscores(seasonStartYear):
 		content = re.sub(r'(?m)^\<!--.*\n?', '', result.content.decode('ISO-8859-1'))
 		content = re.sub(r'(?m)^\-->.*\n?', '', content)
 		soup = bs4.BeautifulSoup(content, 'lxml')
-
 
 		######################## Try to extract both home and away coach names ########################
 		try:
@@ -202,30 +202,6 @@ def extractAllBoxscores(seasonStartYear):
 							else:
 								data['homeQB'] = playerName
 
-				# try:
-				# 	pbpTable = soup.find('table', id='pbp')
-				# 	pbpTable = pbpTable.find('tbody')
-				# 	rows = pbpTable.find_all('tr')
-				#
-				#
-				# 	for row in rows[1:]: #Skip first row since it is '1st Quarter' heading
-				# 		play = row.find('td', id='detail').get_text()
-				# 		if 'pass' not in play:
-				# 			continue
-				# 		else:
-				# 			playList = play.split(' pass ')
-				# 			playerName = playList[0]
-				# 			if data['awayQB'] and data['homeQB']:
-				# 				break
-				#
-				# 			if playerName in QBNames['awayQB']:
-				# 				if not data['awayQB']:
-				# 					data['awayQB'] = playerName
-				# 			elif playerName in QBNames['homeQB']:
-				# 				if not data['homeQB']:
-				# 					data['homeQB'] = playerName
-				# except:
-				# 	print('No play by play for game :' + gameLink)
 		except:
 			print('Unable to find starting roster info for game: ' + gameLink)
 			# TODO Add Logger
@@ -271,7 +247,7 @@ def concatBoxscoreCSVs(filePath):
 	masterFile.to_csv('master_boxscore_data_1970_2019.csv')
 
 if __name__ == '__main__':
-	# concatBoxscoreCSVs(os.listdir())
+
 	for year in range(1970,1999):
 		try:
 			dataDF = extractAllBoxscores(year)
@@ -279,3 +255,5 @@ if __name__ == '__main__':
 		except:
 			print('Failed to compute all of {}'.format(year))
 			continue
+
+	concatBoxscoreCSVs(os.listdir())
