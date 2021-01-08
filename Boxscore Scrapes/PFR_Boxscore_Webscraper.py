@@ -10,7 +10,7 @@ from time import sleep
 import re
 import pandas as pd
 
-def extractBoxscoreLinks(year):
+def extractBoxscoreLinks(seasonStartYear):
 	'''
 	The script reads the years/{yearNum}/games.htm page on PFR and iterates over the Week-by-Week table to extract
 	 the boxscore links. Links are returned as follows:
@@ -23,7 +23,7 @@ def extractBoxscoreLinks(year):
 	# First, we iterate over the years/{yearNum}/games.htm page on PFR to extract all links to boxscores
 
 	# Read games page for specified year from pro-football-reference with soup
-	result = requests.get('http://www.pro-football-reference.com/years/{0}/games.htm'.format(year))
+	result = requests.get('http://www.pro-football-reference.com/years/{0}/games.htm'.format(seasonStartYear))
 	content = re.sub(r'(?m)^\<!--.*\n?', '', result.content.decode('ISO-8859-1'))
 	content = re.sub(r'(?m)^\-->.*\n?', '', content)
 	soup = bs4.BeautifulSoup(content, 'html5lib')
@@ -35,6 +35,9 @@ def extractBoxscoreLinks(year):
 
 	# Initialize dictionary which will contain info from weekByWeek table from webpage defined in result variable
 	weekByWeek = {}
+
+	# Save season number (NFL started in 1920, considered season 1)
+	seasonNumber = seasonStartYear - 1920 + 1
 
 	# Iterate over each row in table
 	for row in rows:
@@ -48,7 +51,9 @@ def extractBoxscoreLinks(year):
 		else:
 			gameLink = gameLink['href']
 
-		# Extract week, date, winner, and loser from row
+		# Extract year, week, date, winner, and loser from row
+		# (Note year may not match input year since
+		year = gameLink.split('/')[2][:4]
 		week = row.find(attrs={'data-stat': 'week_num'}).text
 		date = row.find(attrs={'data-stat': 'game_date'}).text
 		winner = row.find(attrs={'data-stat': 'winner'}).text
@@ -63,9 +68,10 @@ def extractBoxscoreLinks(year):
 			away = loser
 
 		# Append date, week, home and away to weekByWeek dictionary with key of gameLink
-		weekByWeek[gameLink] = {'date': date, 'week': week, 'home': home, 'away': away}
+		weekByWeek[gameLink] = {'date': date, 'week': week, 'year': year, 'seasonNumber': seasonNumber, 'home': home, 'away': away}
 	return weekByWeek
-def extractAllBoxscores(year):
+
+def extractAllBoxscores(seasonStartYear):
 
 	'''
 	First, we extract all boxscore links from the PFR years/{yearNum}/games.htm page, storing in the dictionary
@@ -79,7 +85,7 @@ def extractAllBoxscores(year):
 		6. Over/Under
 		7. Starting Rosters
 	'''
-	weekByWeek = extractBoxscoreLinks(year)
+	weekByWeek = extractBoxscoreLinks(seasonStartYear)
 
 	# Initialize DataFrame where each row will be one game and each column contains different statistic
 	dataDF = pd.DataFrame()
@@ -88,7 +94,7 @@ def extractAllBoxscores(year):
 	for gameLink, info in weekByWeek.items():
 		# Initialize empty data dict which is used to store data from current gameLink on each iteration
 		data = {}
-		data['year'] = year
+
 		# Update data with info from weekByWeek dict
 		data.update(info)
 
@@ -145,7 +151,7 @@ def extractAllBoxscores(year):
 		try:
 			# PFR has starting roster data for 1999 -> present. For years previous, starting QB are assumed
 			# to be player with most pass attempts in the game
-			if year >= 1999:
+			if seasonStartYear >= 1999:
 
 				# Find rows in home starters table (each row is a tr tag nested in tbody tag)
 				starterTable = soup.find('table', id='home_starters')
@@ -253,8 +259,19 @@ def extractAllBoxscores(year):
 
 	return dataDF
 
+def concatBoxscoreCSVs(filePath):
+	'''Concatentates all CSVs in filePath (excluding any master CSVs) '''
+	# Selects all csv files in filePath that are not master
+	csvFiles = [file for file in filePath if file.endswith('.csv') and 'master' not in file]
+	# Concatenate all csvFiles into masterFile
+	masterFile = pd.concat([pd.read_csv(f, index_col=0) for f in csvFiles])
+	# Reset index (since concatenation causes indices not to increment by 1 each row)
+	masterFile.reset_index(inplace=True, drop=True)
+	# Export master file
+	masterFile.to_csv('master_boxscore_data_1970_2019.csv')
 
 if __name__ == '__main__':
+	# concatBoxscoreCSVs(os.listdir())
 	for year in range(1970,1999):
 		try:
 			dataDF = extractAllBoxscores(year)
