@@ -33,9 +33,6 @@ def extractBoxscoreLinks(year):
 	games = gamesTable.find('tbody')
 	rows = games.find_all('tr')
 
-	# Initialize DataFrame where each row will be one game and each column contains different statistic
-	dataDF = pd.DataFrame()
-
 	# Initialize dictionary which will contain info from weekByWeek table from webpage defined in result variable
 	weekByWeek = {}
 
@@ -67,7 +64,7 @@ def extractBoxscoreLinks(year):
 
 		# Append date, week, home and away to weekByWeek dictionary with key of gameLink
 		weekByWeek[gameLink] = {'date': date, 'week': week, 'home': home, 'away': away}
-
+	return weekByWeek
 def extractAllBoxscores(year):
 
 	'''
@@ -83,6 +80,9 @@ def extractAllBoxscores(year):
 		7. Starting Rosters
 	'''
 	weekByWeek = extractBoxscoreLinks(year)
+
+	# Initialize DataFrame where each row will be one game and each column contains different statistic
+	dataDF = pd.DataFrame()
 
 	# Iterate over all links, accessing boxscore webpage and extracting necessary data
 	for gameLink, info in weekByWeek.items():
@@ -143,33 +143,106 @@ def extractAllBoxscores(year):
 
 		##################### Try and extract starters from starters tables (one home, one away) ####################
 		try:
-			# Find rows in home starters table (each row is a tr tag nested in tbody tag)
-			starterTable = soup.find('table', id='home_starters')
-			starterTable = starterTable.find('tbody')
-			rows = starterTable.find_all('tr')
+			# PFR has starting roster data for 1999 -> present. For years previous, starting QB are assumed
+			# to be player with most pass attempts in the game
+			if year >= 1999:
 
-			# Iterate over each row, saving playerName and position to data dictionary
-			for row in rows:
-				playerName = row.find('th').get_text().rstrip()
-				position = row.find('td').get_text().rstrip()
-				data['home' + position] = playerName
+				# Find rows in home starters table (each row is a tr tag nested in tbody tag)
+				starterTable = soup.find('table', id='home_starters')
+				starterTable = starterTable.find('tbody')
+				rows = starterTable.find_all('tr')
 
-			# Find rows in away starters table (each row is a tr tag nested in tbody tag)
-			starterTable = soup.find('table', id='vis_starters')
-			starterTable = starterTable.find('tbody')
-			rows = starterTable.find_all('tr')
+				# Iterate over each row, saving playerName and position to data dictionary
+				for row in rows:
+					playerName = row.find('th').get_text().rstrip()
+					position = row.find('td').get_text().rstrip()
+					data['home' + position] = playerName
 
-			# Iterate over each row, saving playerName and position to data dictionary
-			for row in rows:
-				playerName = row.find('th').get_text().rstrip()
-				position = row.find('td').get_text().rstrip()
-				data['away' + position] = playerName
+				# Find rows in away starters table (each row is a tr tag nested in tbody tag)
+				starterTable = soup.find('table', id='vis_starters')
+				starterTable = starterTable.find('tbody')
+				rows = starterTable.find_all('tr')
+
+				# Iterate over each row, saving playerName and position to data dictionary
+				for row in rows:
+					playerName = row.find('th').get_text().rstrip()
+					position = row.find('td').get_text().rstrip()
+					data['away' + position] = playerName
+
+			else:
+				statsTable = soup.find('table', id='player_offense')
+				statsTable = statsTable.find('tbody')
+				rows = statsTable.find_all('tr')
+
+				awayPlayers = True
+				QBNames = {'homeQB': '', 'awayQB': ''}
+				maxAttempts = 0
+				for row in rows:
+					try:
+						passAttempts = int(row.find('td', {'data-stat': 'pass_att'}).get_text())
+					except:
+						awayPlayers = False
+						maxAttempts = 0
+						continue
+
+					if passAttempts == 0:
+						continue
+					else:
+						if passAttempts > maxAttempts:
+							maxAttempts = passAttempts
+							playerName = row.find('th', {'data-stat': 'player'}).get_text().rstrip()
+							if awayPlayers:
+								data['awayQB'] = playerName
+							else:
+								data['homeQB'] = playerName
+
+				# try:
+				# 	pbpTable = soup.find('table', id='pbp')
+				# 	pbpTable = pbpTable.find('tbody')
+				# 	rows = pbpTable.find_all('tr')
+				#
+				#
+				# 	for row in rows[1:]: #Skip first row since it is '1st Quarter' heading
+				# 		play = row.find('td', id='detail').get_text()
+				# 		if 'pass' not in play:
+				# 			continue
+				# 		else:
+				# 			playList = play.split(' pass ')
+				# 			playerName = playList[0]
+				# 			if data['awayQB'] and data['homeQB']:
+				# 				break
+				#
+				# 			if playerName in QBNames['awayQB']:
+				# 				if not data['awayQB']:
+				# 					data['awayQB'] = playerName
+				# 			elif playerName in QBNames['homeQB']:
+				# 				if not data['homeQB']:
+				# 					data['homeQB'] = playerName
+				# except:
+				# 	print('No play by play for game :' + gameLink)
 		except:
 			print('Unable to find starting roster info for game: ' + gameLink)
 			# TODO Add Logger
+		######################## Try and extract team stats from Team Stats table #######################
+		try:
+			# Find rows in team stats starters table (each row is a tr tag nested in tbody tag)
+			statsTable = soup.find('table', id='team_stats')
+			statsTable = statsTable.find('tbody')
+			rows = statsTable.find_all('tr')
 
+			# Iterate over each row, saving playerName and position to data dictionary
+			for row in rows:
+				stat = row.find('th').get_text().rstrip()
+				awayVal = row.find('td', {'data-stat': 'vis_stat'}).get_text().rstrip()
+				homeVal = row.find('td', {'data-stat': 'home_stat'}).get_text().rstrip()
+				data['away ' + stat] = awayVal
+				data['home ' + stat] = homeVal
 
-		print('Done scrapping game: {0} at {1} in year {2} of week {3}\n'.format(data['home'], data['away'], data['year'], data['week']))
+		except:
+			print('Unable to find Team stats for game: ' + gameLink)
+
+		# print to keep track of progress
+		print('Done scrapping Week {3} Year {2}:  {0} at {1}'.format(data['home'], data['away'], data['year'], data['week']))
 
 		# Append data from data dictionary on each iteration (aka for each game) to dataDF
 		if dataDF.empty:
@@ -182,7 +255,7 @@ def extractAllBoxscores(year):
 
 
 if __name__ == '__main__':
-	for year in range(2017,2020):
+	for year in range(1970,1999):
 		try:
 			dataDF = extractAllBoxscores(year)
 			dataDF.to_csv('boxscore_data_{}.csv'.format(year))
