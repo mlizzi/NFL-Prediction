@@ -1,14 +1,13 @@
 import requests
 import bs4
-import json
-import datetime
 import os
-import csv
-from random import randint
-from math import pi
-from time import sleep
 import re
 import pandas as pd
+
+# NOTE: 1. This script assumes pro-football-reference.com page formats are as of January 2021. Changes to the website
+#          may cause script issues
+#       2. For understanding the code, it may be useful to open the associated pro-football-reference (PFR hereafter)
+#          page while reading through the code and comments
 
 def extractBoxscoreLinks(seasonStartYear):
 	'''
@@ -19,10 +18,9 @@ def extractBoxscoreLinks(seasonStartYear):
 
 
 	 :return: weekByWeek = {link1: {statName1: statVal1, ...} }
-	 where
-	 link1: suffix of link to PRF webpage (can access page by appending to http://www.pro-football-reference.com/)
-	 statName#: stat extracted from Week-by-Week table
-	 statVal#: value of stat
+				 link1: suffix of link to PFR page (can access by appending to http://www.pro-football-reference.com/)
+				 statName#: stat extracted from Week-by-Week table
+				 statVal#: value of stat
 	'''
 
 	# Read games page for specified year from pro-football-reference with soup
@@ -246,9 +244,13 @@ def concatBoxscoreCSVs(filePath):
 	# Export master file
 	masterFile.to_csv('master_boxscore_data_1970_2019.csv')
 
+def postProcessColumns():
+	'''
+	Some columns of master need to be separated. For example, Rush-Yds-TDs will be split into 3 columns.
+	'''
 if __name__ == '__main__':
 
-	for year in range(1970,1999):
+	for year in range(1995,2020):
 		try:
 			dataDF = extractAllBoxscores(year)
 			dataDF.to_csv('boxscore_data_{}.csv'.format(year))
