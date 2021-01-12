@@ -241,21 +241,79 @@ def concatBoxscoreCSVs(filePath):
 	masterFile = pd.concat([pd.read_csv(f, index_col=0) for f in csvFiles])
 	# Reset index (since concatenation causes indices not to increment by 1 each row)
 	masterFile.reset_index(inplace=True, drop=True)
-	# Export master file
-	masterFile.to_csv('master_boxscore_data_1970_2019.csv')
+	return masterFile
 
-def postProcessColumns():
+def postProcessColumns(masterDF):
 	'''
 	Some columns of master need to be separated. For example, Rush-Yds-TDs will be split into 3 columns.
 	'''
+	ppCSV = masterDF.copy(deep=True)
+
+	ppCSV[['currHomeWins', 'currHomeLoses', 'currHomeTies']] = ppCSV['homeRecord'].str.split('-', expand=True)
+	ppCSV[['currAwayWins', 'currAwayLoses', 'currAwayTies']] = ppCSV['awayRecord'].str.split('-', expand=True)
+	ppCSV['currHomeTies'].fillna(0, inplace=True)
+	ppCSV['currAwayTies'].fillna(0, inplace=True)
+	ppCSV = ppCSV.drop('homeRecord', axis=1)
+	ppCSV = ppCSV.drop('awayRecord', axis=1)
+
+	# Split Rush-Yds-TDs column into 3 different columns.
+	# Note since negative-sign ('-') is used for negative numbers and delimiters, we replace the negative integer with
+	# the 'neg' string, to be replaced with negative sign later after delimitation split
+	ppCSV['away Rush-Yds-TDs'] = ppCSV['away Rush-Yds-TDs'].str.replace('--', '-neg')
+	ppCSV['home Rush-Yds-TDs'] = ppCSV['away Rush-Yds-TDs'].str.replace('--', '-neg')
+	ppCSV[['awayRushes', 'awayRushYds', 'awayRushTDs']] = ppCSV['away Rush-Yds-TDs'].str.split('-', expand=True)
+	ppCSV[['homeRushes', 'homeRushYds', 'homeRushTDs']] = ppCSV['home Rush-Yds-TDs'].str.split('-', expand=True)
+	ppCSV['awayRushYds'] = ppCSV['awayRushYds'].str.replace('neg', '-')
+	ppCSV['homeRushYds'] = ppCSV['awayRushYds'].str.replace('neg', '-')
+	ppCSV = ppCSV.drop('away Rush-Yds-TDs', axis=1)
+	ppCSV = ppCSV.drop('home Rush-Yds-TDs', axis=1)
+
+	ppCSV['away Cmp-Att-Yd-TD-INT'] = ppCSV['away Cmp-Att-Yd-TD-INT'].str.replace('--', '-neg')
+	ppCSV['home Cmp-Att-Yd-TD-INT'] = ppCSV['home Cmp-Att-Yd-TD-INT'].str.replace('--', '-neg')
+	ppCSV[['awayPassCmp', 'awayPassAtt', 'awayPassYds', 'awayPassTDs', 'awayPassInts']] = ppCSV['away Cmp-Att-Yd-TD-INT'].str.split('-', expand=True)
+	ppCSV[['homePassCmp', 'homePassAtt', 'homePassYds', 'homePassTDs', 'homePassInts']] = ppCSV['home Cmp-Att-Yd-TD-INT'].str.split('-', expand=True)
+	ppCSV['awayPassYds'] = ppCSV['awayPassYds'].str.replace('neg', '-')
+	ppCSV['homePassYds'] = ppCSV['homePassYds'].str.replace('neg', '-')
+	ppCSV = ppCSV.drop('away Cmp-Att-Yd-TD-INT', axis=1)
+	ppCSV = ppCSV.drop('home Cmp-Att-Yd-TD-INT', axis=1)
+
+	ppCSV[['awaySacks', 'awaySackYds']] = ppCSV['away Sacked-Yards'].str.split('-', expand=True)
+	ppCSV = ppCSV.drop('away Sacked-Yards', axis=1)
+	ppCSV[['homeSacks', 'homeSackYds']] = ppCSV['home Sacked-Yards'].str.split('-', expand=True)
+	ppCSV = ppCSV.drop('home Sacked-Yards', axis=1)
+
+	ppCSV[['awayFumbles', 'awayFumblesLost']] = ppCSV['away Fumbles-Lost'].str.split('-', expand=True)
+	ppCSV = ppCSV.drop('away Fumbles-Lost', axis=1)
+	ppCSV[['homeFumbles', 'homeFumblesLost']] = ppCSV['home Fumbles-Lost'].str.split('-', expand=True)
+	ppCSV = ppCSV.drop('home Fumbles-Lost', axis=1)
+
+	ppCSV[['awayPenalties', 'awayPenaltyYds']] = ppCSV['away Penalties-Yards'].str.split('-', expand=True)
+	ppCSV = ppCSV.drop('away Penalties-Yards', axis=1)
+	ppCSV[['homePenalties', 'homePenaltyYds']] = ppCSV['home Penalties-Yards'].str.split('-', expand=True)
+	ppCSV = ppCSV.drop('home Penalties-Yards', axis=1)
+
+	return ppCSV
+
+
 if __name__ == '__main__':
+	# # STEP 1: Scrape all boxscores, save to individual csv files
+	# # Scrape boxscores for years
+	# for year in range(1995,2020):
+	# 	try:
+	# 		dataDF = extractAllBoxscores(year)
+	# 		dataDF.to_csv('boxscore_data_{}.csv'.format(year))
+	# 	except:
+	# 		print('Failed to compute all of {}'.format(year))
+	# 		continue
 
-	for year in range(1995,2020):
-		try:
-			dataDF = extractAllBoxscores(year)
-			dataDF.to_csv('boxscore_data_{}.csv'.format(year))
-		except:
-			print('Failed to compute all of {}'.format(year))
-			continue
+	# # STEP 2: Concatenate all individual csv files into one master file
+	# Concatenate all boxscore CSVs and write to file
+	# masterFile = concatBoxscoreCSVs(os.listdir())
+	# masterFile.to_csv('master_boxscore_data_1970_2019.csv')
 
-	concatBoxscoreCSVs(os.listdir())
+	# # STEP 3: Post-process master file to fit format for network input (Each column holds one stat)
+	# masterDF = pd.read_csv('master_boxscore_data_1970_2019.csv', index_col=0, dtype=str)
+	# ppCSV = postProcessColumns(masterDF)
+	# ppCSV.to_csv('pp_master_boxscore_data_1970_2019.csv')
+
+
