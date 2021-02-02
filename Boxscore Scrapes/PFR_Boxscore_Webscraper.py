@@ -215,8 +215,8 @@ def extractAllBoxscores(seasonStartYear):
 				stat = row.find('th').get_text().rstrip()
 				awayVal = row.find('td', {'data-stat': 'vis_stat'}).get_text().rstrip()
 				homeVal = row.find('td', {'data-stat': 'home_stat'}).get_text().rstrip()
-				data['away ' + stat] = awayVal
-				data['home ' + stat] = homeVal
+				data['away' + stat] = awayVal
+				data['home' + stat] = homeVal
 
 		except:
 			print('Unable to find Team stats for game: ' + gameLink)
@@ -249,10 +249,10 @@ def postProcessColumns(masterDF):
 	'''
 	ppCSV = masterDF.copy(deep=True)
 
-	ppCSV[['currHomeWins', 'currHomeLoses', 'currHomeTies']] = ppCSV['homeRecord'].str.split('-', expand=True)
-	ppCSV[['currAwayWins', 'currAwayLoses', 'currAwayTies']] = ppCSV['awayRecord'].str.split('-', expand=True)
-	ppCSV['currHomeTies'].fillna(0, inplace=True)
-	ppCSV['currAwayTies'].fillna(0, inplace=True)
+	ppCSV[['homeCurrWins', 'homeCurrLoses', 'homeCurrTies']] = ppCSV['homeRecord'].str.split('-', expand=True)
+	ppCSV[['awayCurrWins', 'awayCurrLoses', 'awayCurrTies']] = ppCSV['awayRecord'].str.split('-', expand=True)
+	ppCSV['homeCurrTies'].fillna(0, inplace=True)
+	ppCSV['awayCurrTies'].fillna(0, inplace=True)
 	ppCSV = ppCSV.drop('homeRecord', axis=1)
 	ppCSV = ppCSV.drop('awayRecord', axis=1)
 
@@ -261,36 +261,36 @@ def postProcessColumns(masterDF):
 	# the 'neg' string, to be replaced with negative sign later after delimitation split
 	ppCSV['away Rush-Yds-TDs'] = ppCSV['away Rush-Yds-TDs'].str.replace('--', '-neg')
 	ppCSV['home Rush-Yds-TDs'] = ppCSV['away Rush-Yds-TDs'].str.replace('--', '-neg')
-	ppCSV[['awayRushes', 'awayRushYds', 'awayRushTDs']] = ppCSV['away Rush-Yds-TDs'].str.split('-', expand=True)
-	ppCSV[['homeRushes', 'homeRushYds', 'homeRushTDs']] = ppCSV['home Rush-Yds-TDs'].str.split('-', expand=True)
+	ppCSV[['awayRushes', 'awayRushYds', 'awayRushTDs']] = ppCSV['awayRush-Yds-TDs'].str.split('-', expand=True)
+	ppCSV[['homeRushes', 'homeRushYds', 'homeRushTDs']] = ppCSV['homeRush-Yds-TDs'].str.split('-', expand=True)
 	ppCSV['awayRushYds'] = ppCSV['awayRushYds'].str.replace('neg', '-')
 	ppCSV['homeRushYds'] = ppCSV['awayRushYds'].str.replace('neg', '-')
-	ppCSV = ppCSV.drop('away Rush-Yds-TDs', axis=1)
-	ppCSV = ppCSV.drop('home Rush-Yds-TDs', axis=1)
+	ppCSV = ppCSV.drop('awayRush-Yds-TDs', axis=1)
+	ppCSV = ppCSV.drop('homeRush-Yds-TDs', axis=1)
 
-	ppCSV['away Cmp-Att-Yd-TD-INT'] = ppCSV['away Cmp-Att-Yd-TD-INT'].str.replace('--', '-neg')
-	ppCSV['home Cmp-Att-Yd-TD-INT'] = ppCSV['home Cmp-Att-Yd-TD-INT'].str.replace('--', '-neg')
-	ppCSV[['awayPassCmp', 'awayPassAtt', 'awayPassYds', 'awayPassTDs', 'awayPassInts']] = ppCSV['away Cmp-Att-Yd-TD-INT'].str.split('-', expand=True)
-	ppCSV[['homePassCmp', 'homePassAtt', 'homePassYds', 'homePassTDs', 'homePassInts']] = ppCSV['home Cmp-Att-Yd-TD-INT'].str.split('-', expand=True)
+	ppCSV['awayCmp-Att-Yd-TD-INT'] = ppCSV['awayCmp-Att-Yd-TD-INT'].str.replace('--', '-neg')
+	ppCSV['homeCmp-Att-Yd-TD-INT'] = ppCSV['homeCmp-Att-Yd-TD-INT'].str.replace('--', '-neg')
+	ppCSV[['awayPassCmp', 'awayPassAtt', 'awayPassYds', 'awayPassTDs', 'awayPassInts']] = ppCSV['awayCmp-Att-Yd-TD-INT'].str.split('-', expand=True)
+	ppCSV[['homePassCmp', 'homePassAtt', 'homePassYds', 'homePassTDs', 'homePassInts']] = ppCSV['homeCmp-Att-Yd-TD-INT'].str.split('-', expand=True)
 	ppCSV['awayPassYds'] = ppCSV['awayPassYds'].str.replace('neg', '-')
 	ppCSV['homePassYds'] = ppCSV['homePassYds'].str.replace('neg', '-')
-	ppCSV = ppCSV.drop('away Cmp-Att-Yd-TD-INT', axis=1)
-	ppCSV = ppCSV.drop('home Cmp-Att-Yd-TD-INT', axis=1)
+	ppCSV = ppCSV.drop('awayCmp-Att-Yd-TD-INT', axis=1)
+	ppCSV = ppCSV.drop('homeCmp-Att-Yd-TD-INT', axis=1)
 
-	ppCSV[['awaySacks', 'awaySackYds']] = ppCSV['away Sacked-Yards'].str.split('-', expand=True)
-	ppCSV = ppCSV.drop('away Sacked-Yards', axis=1)
-	ppCSV[['homeSacks', 'homeSackYds']] = ppCSV['home Sacked-Yards'].str.split('-', expand=True)
-	ppCSV = ppCSV.drop('home Sacked-Yards', axis=1)
+	ppCSV[['awaySacks', 'awaySackYds']] = ppCSV['awaySacked-Yards'].str.split('-', expand=True)
+	ppCSV[['homeSacks', 'homeSackYds']] = ppCSV['homeSacked-Yards'].str.split('-', expand=True)
+	ppCSV = ppCSV.drop('awaySacked-Yards', axis=1)
+	ppCSV = ppCSV.drop('homeSacked-Yards', axis=1)
 
-	ppCSV[['awayFumbles', 'awayFumblesLost']] = ppCSV['away Fumbles-Lost'].str.split('-', expand=True)
-	ppCSV = ppCSV.drop('away Fumbles-Lost', axis=1)
-	ppCSV[['homeFumbles', 'homeFumblesLost']] = ppCSV['home Fumbles-Lost'].str.split('-', expand=True)
-	ppCSV = ppCSV.drop('home Fumbles-Lost', axis=1)
+	ppCSV[['awayFumbles', 'awayFumblesLost']] = ppCSV['awayFumbles-Lost'].str.split('-', expand=True)
+	ppCSV[['homeFumbles', 'homeFumblesLost']] = ppCSV['homeFumbles-Lost'].str.split('-', expand=True)
+	ppCSV = ppCSV.drop('awayFumbles-Lost', axis=1)
+	ppCSV = ppCSV.drop('homeFumbles-Lost', axis=1)
 
-	ppCSV[['awayPenalties', 'awayPenaltyYds']] = ppCSV['away Penalties-Yards'].str.split('-', expand=True)
-	ppCSV = ppCSV.drop('away Penalties-Yards', axis=1)
-	ppCSV[['homePenalties', 'homePenaltyYds']] = ppCSV['home Penalties-Yards'].str.split('-', expand=True)
-	ppCSV = ppCSV.drop('home Penalties-Yards', axis=1)
+	ppCSV[['awayPenalties', 'awayPenaltyYds']] = ppCSV['awayPenalties-Yards'].str.split('-', expand=True)
+	ppCSV[['homePenalties', 'homePenaltyYds']] = ppCSV['homePenalties-Yards'].str.split('-', expand=True)
+	ppCSV = ppCSV.drop('awayPenalties-Yards', axis=1)
+	ppCSV = ppCSV.drop('homePenalties-Yards', axis=1)
 
 	return ppCSV
 
