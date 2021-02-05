@@ -3,11 +3,13 @@ import bs4
 import os
 import re
 import pandas as pd
-
+import logging
 # NOTE: 1. This script assumes pro-football-reference.com page formats are as of January 2021. Changes to the website
 #          may cause script issues
 #       2. For understanding the code, it may be useful to open the associated pro-football-reference (PFR hereafter)
 #          page while reading through the code and comments
+
+logging.basicConfig(filename='scraping.log', filemode='w')
 
 def extractBoxscoreLinks(seasonStartYear):
 	'''
@@ -106,12 +108,21 @@ def extractAllBoxscores(seasonStartYear):
 
 		######################## Try to extract both home and away coach names ########################
 		try:
+			scores = soup.find_all('div', {'class':'score'})
+			data['homeScore'] = scores[0].get_text()
+			data['awayScore'] = scores[1].get_text()
+		except:
+			msg = 'Unable to find score for game: ' + gameLink
+			logging.warning(msg)
+			print(msg)
+		try:
 			coaches = soup.find_all('div', {'class': 'datapoint'}) #'datapoint' is class name given only to coach text
 			data['homeCoach'] = coaches[0].get_text().replace('Coach: ', '')
 			data['awayCoach'] = coaches[1].get_text().replace('Coach: ', '')
 		except:
-			#TODO Add Logger
-			print('Unable to find coaches for game: ' + gameLink)
+			msg = 'Unable to find coaches for game: ' + gameLink
+			logging.warning(msg)
+			print(msg)
 
 		######################## Try to extract both home and away records ########################
 		try:
@@ -119,8 +130,9 @@ def extractAllBoxscores(seasonStartYear):
 			data['homeRecord'] = scores[0].findNext().get_text()
 			data['awayRecord'] = scores[1].findNext().get_text()
 		except:
-			#TODO Add Logger
-			print('Unable to find scores for game: ' + gameLink)
+			msg = 'Unable to find record for game: ' + gameLink
+			logging.warning(msg)
+			print(msg)
 
 		######################## Try and extract categories from Game Info table #######################
 		# Extract the following categories
@@ -142,8 +154,9 @@ def extractAllBoxscores(seasonStartYear):
 					# Get category data for row (found in the td tag of the table)
 					data[category] = row.find('td').get_text()
 		except:
-			# TODO Add Logger
-			print('Unable to find Game Info for game: ' + gameLink)
+			msg = 'Unable to find Game Info for game: ' + gameLink
+			logging.warning(msg)
+			print(msg)
 
 		##################### Try and extract starters from starters tables (one home, one away) ####################
 		try:
@@ -201,8 +214,9 @@ def extractAllBoxscores(seasonStartYear):
 								data['homeQB'] = playerName
 
 		except:
-			print('Unable to find starting roster info for game: ' + gameLink)
-			# TODO Add Logger
+			msg = 'Unable to find starting roster info for game: ' + gameLink
+			logging.warning(msg)
+			print(msg)
 		######################## Try and extract team stats from Team Stats table #######################
 		try:
 			# Find rows in team stats starters table (each row is a tr tag nested in tbody tag)
@@ -219,7 +233,9 @@ def extractAllBoxscores(seasonStartYear):
 				data['home ' + stat] = homeVal
 
 		except:
-			print('Unable to find Team stats for game: ' + gameLink)
+			msg = 'Unable to find Team Stats for game: ' + gameLink
+			logging.warning(msg)
+			print(msg)
 
 		# print to keep track of progress
 		print('Done scrapping Week {3} Year {2}:  {0} at {1}'.format(data['home'], data['away'], data['year'], data['week']))
@@ -292,13 +308,14 @@ def postProcessColumns(masterDF):
 	ppCSV = ppCSV.drop('away Penalties-Yards', axis=1)
 	ppCSV = ppCSV.drop('home Penalties-Yards', axis=1)
 
+	ppCSV[['favouredTeam', 'spread']] = ppCSV['vegas line'].str.rsplit(' ', 1, expand=True)
 	return ppCSV
 
 
 if __name__ == '__main__':
 	# # STEP 1: Scrape all boxscores, save to individual csv files
 	# # Scrape boxscores for years
-	# for year in range(1995,2020):
+	# for year in range(1971,2020):
 	# 	try:
 	# 		dataDF = extractAllBoxscores(year)
 	# 		dataDF.to_csv('boxscore_data_{}.csv'.format(year))
@@ -306,7 +323,7 @@ if __name__ == '__main__':
 	# 		print('Failed to compute all of {}'.format(year))
 	# 		continue
 
-	# # STEP 2: Concatenate all individual csv files into one master file
+	# STEP 2: Concatenate all individual csv files into one master file
 	# Concatenate all boxscore CSVs and write to file
 	# masterFile = concatBoxscoreCSVs(os.listdir())
 	# masterFile.to_csv('master_boxscore_data_1970_2019.csv')
