@@ -3,6 +3,7 @@ import bs4
 import os
 import re
 import pandas as pd
+import numpy as np
 import logging
 # NOTE: 1. This script assumes pro-football-reference.com page formats are as of January 2021. Changes to the website
 #          may cause script issues
@@ -309,13 +310,30 @@ def postProcessColumns(masterDF):
 	ppCSV = ppCSV.drop('home Penalties-Yards', axis=1)
 
 	ppCSV[['favouredTeam', 'spread']] = ppCSV['vegas line'].str.rsplit(' ', 1, expand=True)
-	return ppCSV
+	ppCSV['favouredTeam'].fillna('N/A')
+	ppCSV['spread'].fillna(0)
+	ppCSV = ppCSV.drop('vegas line', axis=1)
 
+	# winner column will be 1 if home wins, 0 if away wins or tie
+	ppCSV['winner'] = np.where(ppCSV['homeScore'] > ppCSV['awayScore'], 1, 0)
+
+	# winnerATS column will be 1 if spread covered, 0 if spread not covered
+	conditions = [
+	    (ppCSV['favouredTeam'] == ppCSV['home']) & (ppCSV['homeScore'].astype(float) - ppCSV['awayScore'].astype(float) + ppCSV['spread'].astype(float) > 0),
+	    (ppCSV['favouredTeam'] == ppCSV['away']) & (ppCSV['awayScore'].astype(float) - ppCSV['homeScore'].astype(float) + ppCSV['spread'].astype(float) > 0),
+		(ppCSV['favouredTeam'] == 'Pick') & (ppCSV['homeScore'].astype(float) != ppCSV['awayScore'].astype(float)),
+		(ppCSV['favouredTeam'] == 'Pick') & (ppCSV['homeScore'].astype(float) == ppCSV['awayScore'].astype(float))
+		]
+	values = [1, 1, 1, 0]
+
+	# create a new column and use np.select to assign values to it using our lists as arguments
+	ppCSV['winnerATS'] = np.select(conditions, values)
+	return ppCSV
 
 if __name__ == '__main__':
 	# # STEP 1: Scrape all boxscores, save to individual csv files
 	# # Scrape boxscores for years
-	# for year in range(1971,2020):
+	# for year in range(1970,2020):
 	# 	try:
 	# 		dataDF = extractAllBoxscores(year)
 	# 		dataDF.to_csv('boxscore_data_{}.csv'.format(year))
