@@ -9,7 +9,7 @@ import logging
 #       2. For understanding the code, it may be useful to open the associated pro-football-reference (PFR hereafter)
 #          page while reading through the code and comments
 
-logging.basicConfig(filename='scraping.log', filemode='w')
+logging.basicConfig(filename='scraping.log')
 
 def extractBoxscoreLinks(seasonStartYear):
 	'''
