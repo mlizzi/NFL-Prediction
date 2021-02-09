@@ -328,6 +328,9 @@ def postProcessColumns(masterDF):
 
 	# create a new column and use np.select to assign values to it using our lists as arguments
 	ppCSV['winnerATS'] = np.select(conditions, values)
+
+	ppCSV.columns = ppCSV.columns.str.replace(' ', '')
+
 	return ppCSV
 
 if __name__ == '__main__':
