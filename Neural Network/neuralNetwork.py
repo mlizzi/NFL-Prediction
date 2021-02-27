@@ -7,7 +7,11 @@ from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
 import datetime as dt
 from matplotlib import pyplot as plt
+import time
+import csv
 # from torchsummary import summary
+pd.set_option('display.width', 320)
+pd.set_option('display.max_columns', 20)
 
 SEASON_TO_YEAR = dict(zip(range(1970, 2020), range(51,101)))
 
@@ -32,8 +36,8 @@ class neuralNetwork(nn.Module):
 class NFLDataset(Dataset):
 
     def __init__(self, dataFrame):
-        self.data = torch.tensor(dataFrame.drop('winnerATS', axis=1).values, dtype=torch.float)
-        self.target = torch.tensor(dataFrame['winnerATS'].values, dtype=torch.float).unsqueeze(1)
+        self.data = torch.tensor(dataFrame.drop('winner', axis=1).values, dtype=torch.float)
+        self.target = torch.tensor(dataFrame['winner'].values, dtype=torch.float).unsqueeze(1)
     # This gets one row, ground truth https://pytorch.org/docs/stable/_modules/torchvision/datasets/mnist.html#MNIST
     def __getitem__(self, index):
         return (self.data[index], self.target[index])
@@ -41,19 +45,42 @@ class NFLDataset(Dataset):
     def __len__(self):
         return self.data.shape[0]
 
-def getSeasonData(database, startSeason, endSeason):
-    startSeasonYear = SEASON_TO_YEAR[startSeason]
-    endSeasonYear = SEASON_TO_YEAR[endSeason]
+def getSeasonData(database, years):
+    startSeasonYear = SEASON_TO_YEAR[years[0]]
+    endSeasonYear = SEASON_TO_YEAR[years[1]]
 
     return database.loc[startSeasonYear: endSeasonYear]
+
+def createTestSet(testData, preGameCount):
+    for idx, row in testData.iterrows():
+        indexInDatabase = int(list(database.index).index(idx))
+
+        filteredHomeDatabase = database.reset_index()[(database.reset_index().home == idx[1])]# | (database.reset_index().away == idx[1])]
+        homeValue = filteredHomeDatabase.index.get_loc(indexInDatabase)
+        pastHomeGames = filteredHomeDatabase.iloc[homeValue - preGameCount:homeValue]
+
+        filteredAwayDatabase = database.reset_index()[(database.reset_index().away == idx[2])]# | (database.reset_index().home == idx[2])]
+        awayValue = filteredAwayDatabase.index.get_loc(indexInDatabase)
+        pastAwayGames = filteredAwayDatabase.iloc[awayValue - preGameCount:awayValue]
+
+        # b = database[(database.home=='New England Patriots') | (database.away == 'New England Patriots')]
+        # pd.concat([database.loc[90,'New England Patriots',:],database.loc[90,:,'New England Patriots']]).reset_index()
+
+        for stat, val in row.iteritems():
+            if 'home' in stat:
+                testData.at[idx, stat] = pastHomeGames[stat].mean()
+            elif 'away' in stat:
+                testData.at[idx, stat] = pastAwayGames[stat].mean()
+    return testData
+
 if __name__ == '__main__':
 
-
-    gameStats = ['seasonNumber', 'winnerATS']
+    # Set data to use, which data to normalize (teamStats contains team specific data and prefix with "home" or "away"
+    gameStats = ['week', 'date', 'home', 'away', 'seasonNumber', 'winner']
     teamStats = ['PassYds', 'RushYds', 'PassTDs', 'Sacks', 'Turnovers']
-
     normalizedStats = teamStats
 
+    # Add prefix to team stats and normalize stats, set dataColumns to be columns pulled from pp_master database
     normalizedColumns = []
     dataColumns = []
     for info in teamStats:
@@ -64,24 +91,32 @@ if __name__ == '__main__':
         for loc in ['home', 'away']:
             normalizedColumns.append(loc + info)
 
-
-
     dataColumns += gameStats
 
+    # Read database
     filePath = os.path.join(os.getcwd(), 'pp_master_boxscore_data_1970_2019.csv')
+    database = pd.read_csv(filePath, usecols=dataColumns, index_col=['seasonNumber', 'home', 'away', 'week'])
 
-
-    # database = pd.read_csv(filePath, index_col=['seasonNumber'], usecols=dataColumns)
-    database = pd.read_csv(filePath, usecols=dataColumns, index_col='seasonNumber')
-
+    # Normalize stats
     for info in normalizedColumns:
         database[info] = (database[info] - database[info].mean()) / database[info].std()
 
-    trainData = getSeasonData(database, 2002, 2003)
-    testData = getSeasonData(database, 2004, 2004)
+    database = database.drop(['date'], axis=1)
 
-    trainLoader = DataLoader(NFLDataset(trainData), batch_size=len(trainData))
-    testLoader = DataLoader(NFLDataset(testData), batch_size=len(testData))
+    trainYears = (2003, 2003)
+    testYears = (2004, 2004)
+    trainData = getSeasonData(database, trainYears)
+    tempTestData = getSeasonData(database, testYears)
+    testData = tempTestData.copy(deep=True)
+    start = time.time()
+
+    preGameCount = 4
+    print("Creating Test Dataset using past {} games...".format(preGameCount))
+    testData = createTestSet(testData, preGameCount)
+    print("Test Dataset Complete!! Creation took: {}s".format(time.time() - start))
+
+    trainLoader = DataLoader(NFLDataset(trainData), batch_size=len(trainData)//4)
+    testLoader = DataLoader(NFLDataset(testData), batch_size=len(testData)//4)
 
     model = neuralNetwork(10, 5, 2, 1)
 
@@ -91,49 +126,91 @@ if __name__ == '__main__':
     # weight = torch.tensor(np.arange(0, 1, 1/777)).unsqueeze(1)
     # loss = nn.BCELoss(weight=weight)
     loss = nn.BCELoss()
-    learning_rate = 0.012
+    learning_rate = 0.001
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, nesterov=True, momentum=0.9, dampening=0)
     x = nn.Sigmoid()
-    error = []
+    trainError = []
     testAccuracy = []
-    outputLoss = []
-    for i in range(4000):
+    outputTrain = []
+    testLoss = []
+    trainLoss = []
+    epochs = 4000
+    maxAccuracy = 0
+    maxAccuracyEpoch = 0
+    for i in range(epochs):
+        outputTrain = []
+        outputTest = []
         for j, (data, target) in enumerate(trainLoader):
-
             optimizer.zero_grad()
             pred = model(data)
             pred = x(pred)
             output = loss(pred, target)
             #output.item to save loss
-            outputLoss.append(output)
+            outputTrain.append(output.item())
             output.backward()
             optimizer.step()
-
-        error.append(torch.mean((torch.round(pred) == target).float()))
+        trainLoss.append(np.mean(outputTrain))
+        # trainError.append(torch.mean((torch.round(pred) == target).float()))
 
         if i % 100 == 0:
             print("Training Loss: " + str(output.item()))
 
-    plt.plot(error)
-    plt.plot(outputLoss)
-    plt.legend(['Training Accuracy', 'Training Loss'])
-    plt.savefig('Test 8')
-    total = 0
-    correct = 0
+        total = 0
+        correct = 0
 
-    with torch.no_grad():
-        for i, (data, target) in enumerate(testLoader):
+        with torch.no_grad():
+            for k, (data, target) in enumerate(testLoader):
 
-            pred = model(data)
-            pred = x(pred)
-            output = loss(pred, target)
-            total += target.size(0)
-            pred = torch.round(pred)
-            correct += (pred == target).sum().item()
+                # Compute prediction
+                pred = model(data)
+                pred = x(pred)
 
-    accuracy = correct / total
-#
-    print(accuracy)
+                # Compute loss and append to list for this batch
+                output = loss(pred, target)
+                outputTest.append(output.item())
+
+                # Calculate total number of batches run and total correct
+                total += target.size(0)
+                correct += (torch.round(pred) == target).sum().item()
+
+            # testLoss.append(torch.mean((torch.round(pred) == target).float()))
+
+        testLoss.append(np.mean(outputTest))
+        testAccuracy = correct / total
+        if testAccuracy > maxAccuracy:
+            maxAccuracy = testAccuracy
+            maxAccuracyEpoch = i
+
+        if i % 100 == 0:
+            print("Testing Accuracy: " + str(testAccuracy))
+            print("Testing Loss: " + str(output.item()))
+            print('')
+        # print(accuracy)
+
+    plt.plot(testLoss)
+    plt.plot(trainLoss)
+    plt.legend(['Test Loss', 'Training Loss'])
+
+    plotPath = os.path.join(os.getcwd(), 'Model Plots')
+    for i in range(1000):
+
+        plotName = 'Model #{}.png'.format(i)
+        if plotName not in os.listdir(plotPath):
+
+            plt.savefig(os.path.join(plotPath, plotName))
+            torch.save(model.state_dict(),os.path.join(plotPath, plotName.replace('.png', '.pt')))
+            break
+
+    plt.show()
+
+    print('Max Accuracy: {}'.format(maxAccuracy))
+    notes = input("Notes about model?\n")
+    with open('models.csv', 'a') as f:
+        writer = csv.writer(f)
+        writer.writerow([plotName, "-".join(map(str, trainYears)), "-".join(map(str, testYears)), learning_rate, epochs, notes, maxAccuracy, maxAccuracyEpoch, preGameCount])
+
+
+
 #     axs[0].plot(error, label='Model #' + str(t+1))
 #     axs[0].set_xlabel('Epochs')
 #     axs[0].set_ylabel('Training Accuracy')
