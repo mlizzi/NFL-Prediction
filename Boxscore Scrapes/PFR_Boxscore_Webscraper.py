@@ -311,7 +311,7 @@ def postProcessColumns(masterDF):
 
 	ppCSV[['favouredTeam', 'spread']] = ppCSV['vegas line'].str.rsplit(' ', 1, expand=True)
 	ppCSV['favouredTeam'].fillna('N/A')
-	ppCSV['spread'].fillna(0)
+	ppCSV['spread'].fillna(0, inplace=True)
 	ppCSV = ppCSV.drop('vegas line', axis=1)
 
 	# winner column will be 1 if home wins, 0 if away wins or tie
