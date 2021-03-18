@@ -13,6 +13,8 @@ import csv
 import openpyxl
 pd.set_option('display.width', 320)
 pd.set_option('display.max_columns', 20)
+pd.set_option('display.max_rows', 20)
+
 
 SEASON_TO_YEAR = dict(zip(range(1970, 2020), range(51,101)))
 
@@ -22,10 +24,10 @@ class neuralNetwork(nn.Module):
         super(neuralNetwork, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden1_size)
         self.relu1 = nn.ReLU()
-        self.fc1_dropout = nn.Dropout(p=0.1)
+        self.fc1_dropout = nn.Dropout(p=0.2)
         self.fc2 = nn.Linear(hidden1_size, hidden2_size)
         self.relu2 = nn.ReLU()
-        self.fc2_dropout = nn.Dropout(p=0.1)
+        self.fc2_dropout = nn.Dropout(p=0.2)
         self.fc3 = nn.Linear(hidden2_size, num_classes)
 
     def forward(self, x):
@@ -58,7 +60,7 @@ def getSeasonData(database, years):
 
     return database.loc[startSeasonYear: endSeasonYear]
 
-def createTestSet(testData, preGameCount):
+def createTestSetLocation(testData, preGameCount):
     for idx, row in testData.iterrows():
         indexInDatabase = int(list(database.index).index(idx))
 
@@ -74,6 +76,34 @@ def createTestSet(testData, preGameCount):
         # pd.concat([database.loc[90,'New England Patriots',:],database.loc[90,:,'New England Patriots']]).reset_index()
 
         for stat, val in row.iteritems():
+            if 'CurrWin' in stat or 'spread' in stat:
+                continue
+
+            if 'home' in stat:
+                testData.at[idx, stat] = pastHomeGames[stat].mean()
+            elif 'away' in stat:
+                testData.at[idx, stat] = pastAwayGames[stat].mean()
+    return testData
+
+def createTestSetPrevious(testData, preGameCount):
+    for idx, row in testData.iterrows():
+
+
+        indexInDatabase = int(list(database.index).index(idx))
+
+        filteredHomeDatabase = database.reset_index()[(database.reset_index().home == idx[1]) | (database.reset_index().away == idx[1])]
+        homeValue = filteredHomeDatabase.index.get_loc(indexInDatabase)
+        pastHomeGames = filteredHomeDatabase.iloc[homeValue - preGameCount:homeValue]
+
+        filteredAwayDatabase = database.reset_index()[(database.reset_index().away == idx[2]) | (database.reset_index().home == idx[2])]
+        awayValue = filteredAwayDatabase.index.get_loc(indexInDatabase)
+        pastAwayGames = filteredAwayDatabase.iloc[awayValue - preGameCount:awayValue]
+
+        # b = database[(database.home=='New England Patriots') | (database.away == 'New England Patriots')]
+        # pd.concat([database.loc[90,'New England Patriots',:],database.loc[90,:,'New England Patriots']]).reset_index()
+
+        for stat, val in row.iteritems():
+
             if 'home' in stat:
                 testData.at[idx, stat] = pastHomeGames[stat].mean()
             elif 'away' in stat:
@@ -82,10 +112,11 @@ def createTestSet(testData, preGameCount):
 
 if __name__ == '__main__':
 
-    # Set data to use, which data to normalize (teamStats contains team specific data and prefix with "home" or "away"
-    gameStats = ['week', 'home', 'away', 'seasonNumber', 'winnerATS']
-    teamStats = ['PassYds', 'RushYds', 'PassTDs', 'Sacks', 'Turnovers']
-    normalizedStats = teamStats
+    # Set data to use, which data to normalize (teamStats contains team specific data and prefix with "home" or "away")
+
+    gameStats = ['week', 'home', 'away', 'seasonNumber', 'spread', 'winnerATS', 'TotalYardsDifferential', 'TurnoverDifferential'] # Data from the game to use
+    teamStats = ['CurrWins'] # Stats from both teams; prefix of "home" or "away" in database
+    normalizedStats = ['TotalYardsDifferential', 'TurnoverDifferential', 'CurrWins', 'spread'] # Stats to normalize
 
     # Add prefix to team stats and normalize stats, set dataColumns to be columns pulled from pp_master database
     normalizedColumns = []
@@ -94,43 +125,51 @@ if __name__ == '__main__':
         for loc in ['home', 'away']:
             dataColumns.append(loc + info)
 
+
     for info in normalizedStats:
-        for loc in ['home', 'away']:
-            normalizedColumns.append(loc + info)
+        if info in teamStats:
+            for loc in ['home', 'away']:
+                normalizedColumns.append(loc + info)
+        else:
+            normalizedColumns.append(info)
 
     dataColumns += gameStats # dataColumns holds column names to pull from database
 
     # Read database
     filePath = os.path.join(os.getcwd(), 'pp_master_boxscore_data_1970_2019.csv')
     database = pd.read_csv(filePath, usecols=dataColumns, index_col=['seasonNumber', 'home', 'away', 'week'])
-
+    # Found bug, winner column not generating properly
+    # database[((database['homeScore'] > database['awayScore']) & ((database['winner'] == 0))) | ((database['homeScore'] < database['awayScore']) & ((database['winner'] == 1)))]
     # Normalize stats
     for info in normalizedColumns:
         database[info] = (database[info] - database[info].mean()) / database[info].std()
 
     # Extract training and test sets
     # (originalTestData holds original data, testData to be adjusted to hold calculated data in future steps)
-    trainYears = (2003, 2003)
-    testYears = (2003, 2003)
-    trainData = getSeasonData(database, trainYears)[:213]
-    originalTestData = getSeasonData(database, testYears)[213:]
+    trainYears = (2004, 2005)
+    testYears = (2007, 2007)
+    originalTrainData = getSeasonData(database, trainYears)
+    originalTestData = getSeasonData(database, testYears)
 
+    trainData = originalTrainData.copy(deep=True)
     testData = originalTestData.copy(deep=True)
 
 
     # Build testing dataset using previous preGameCount number of games for each team
-    preGameCount = 4
+    preGameCount = 3
     print("Creating Test Dataset using past {} games...".format(preGameCount))
     start = time.time()
-    # testData = createTestSet(testData, preGameCount)
+    trainData = createTestSetLocation(trainData, preGameCount)
+    testData = createTestSetLocation(testData, preGameCount)
     print("Test Dataset Complete!! Creation took: {}s".format(time.time() - start))
 
     # Set train and test loader to be used in training/test loops
-    trainLoader = DataLoader(NFLDataset(trainData), batch_size=len(trainData)//2)
-    testLoader = DataLoader(NFLDataset(testData), batch_size=len(testData)//2)
+    batchAmount = 3
+    trainLoader = DataLoader(NFLDataset(trainData), batch_size=len(trainData)//batchAmount)
+    testLoader = DataLoader(NFLDataset(testData), batch_size=len(testData)//batchAmount)
 
     # Build model from neuralNetwork class
-    model = neuralNetwork(10, 200, 50, 1)
+    model = neuralNetwork(5, 75, 75, 1)
 
 
     # loss = nn.CrossEntropyLoss()
@@ -138,25 +177,26 @@ if __name__ == '__main__':
     # weight = torch.tensor(np.arange(0, 1, 1/777)).unsqueeze(1)
     # loss = nn.BCELoss(weight=weight)
     loss = nn.BCELoss()
-    learning_rate = 0.005
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, nesterov=True, momentum=0.9, dampening=0)
+    learning_rate = 0.05
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, nesterov=True, momentum=0.9, dampening=0, weight_decay=0.01)
     x = nn.Sigmoid()
 
     # Set train and test loss and accuracy to be appended to after each epoch
     trainAccuracy = []
     epochTrainLoss = []
-    testAccuracy = []
+    testAccuracyList = []
     epochTestLoss = []
 
     # Initialize variables to hold max accuracy of the test set
     maxAccuracy = 0
     maxAccuracyEpoch = 0
 
-    epochs = 4000
+    epochs = 200
     for i in range(epochs):
         batchTrainLoss = []
         batchTestLoss = []
         for j, (data, target) in enumerate(trainLoader):
+            model.train()
             # Zero gradient and then predict
             optimizer.zero_grad()
             pred = model(data)
@@ -181,7 +221,7 @@ if __name__ == '__main__':
         correct = 0
         with torch.no_grad():
             for k, (data, target) in enumerate(testLoader):
-
+                model.eval()
                 # Compute prediction
                 pred = model(data)
                 pred = x(pred)
@@ -198,20 +238,22 @@ if __name__ == '__main__':
 
         epochTestLoss.append(np.mean(batchTestLoss))
         testAccuracy = correct / total
+        testAccuracyList.append(testAccuracy)
         if testAccuracy > maxAccuracy:
             maxAccuracy = testAccuracy
             maxAccuracyEpoch = i
 
-        if i % 100 == 0:
-            print("Training Loss: " + str(trainLoss.item()))
-            print("Testing Loss: " + str(testLoss.item()))
+        if i % 5 == 0:
+            print("Training Loss: " + str(np.mean(batchTrainLoss)))
+            print("Testing Loss: " + str(np.mean(batchTestLoss)))
             print("Testing Accuracy: " + str(testAccuracy))
             print('-----------------------------------------')
 
 
     plt.plot(epochTestLoss)
     plt.plot(epochTrainLoss)
-    plt.legend(['Test Loss', 'Training Loss'])
+    plt.plot(testAccuracyList)
+    plt.legend(['Test Loss', 'Training Loss', 'Accuracy'])
 
     plotPath = os.path.join(os.getcwd(), 'Model Plots')
     for i in range(1000):
@@ -229,7 +271,7 @@ if __name__ == '__main__':
     # worksheet = workbook.add_worksheet()
     with open('./Model Plots/models.csv', 'a') as f:
         writer = csv.writer(f)
-        writer.writerow([plotName, "-".join(map(str, trainYears)), "-".join(map(str, testYears)), learning_rate, epochs, maxAccuracy, maxAccuracyEpoch, preGameCount, notes])
+        writer.writerow([plotName, "-".join(map(str, trainYears)), "-".join(map(str, testYears)), learning_rate, epochs, batchAmount, maxAccuracy, maxAccuracyEpoch, preGameCount, model, notes])
 
     plt.show()
 
