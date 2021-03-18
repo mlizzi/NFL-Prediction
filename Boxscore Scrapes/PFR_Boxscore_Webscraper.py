@@ -315,7 +315,7 @@ def postProcessColumns(masterDF):
 	ppCSV = ppCSV.drop('vegas line', axis=1)
 
 	# winner column will be 1 if home wins, 0 if away wins or tie
-	ppCSV['winner'] = np.where(ppCSV['homeScore'] > ppCSV['awayScore'], 1, 0)
+	ppCSV['winner'] = np.where(ppCSV['homeScore'].astype(int) > ppCSV['awayScore'].astype(int), 1, 0)
 
 	# winnerATS column will be 1 if spread covered, 0 if spread not covered
 	conditions = [
@@ -331,6 +331,12 @@ def postProcessColumns(masterDF):
 
 	ppCSV.columns = ppCSV.columns.str.replace(' ', '')
 
+	# Make yard differential column
+	ppCSV['NetPassYardsDifferential'] = ppCSV['homeNetPassYards'].astype(float) - ppCSV['awayNetPassYards'].astype(float)
+	ppCSV['TotalYardsDifferential'] = ppCSV['homeTotalYards'].astype(float) - ppCSV['awayTotalYards'].astype(float)
+
+	# Make turnover differential column
+	ppCSV['TurnoverDifferential'] = ppCSV['homeTurnovers'].astype(float) - ppCSV['awayTurnovers'].astype(float)
 	return ppCSV
 
 if __name__ == '__main__':
