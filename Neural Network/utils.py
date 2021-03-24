@@ -16,7 +16,9 @@ def getSeasonData(database, years):
     return database.loc[startSeasonYear: endSeasonYear]
 
 def createTestSetLocation(database, testData, preGameCount):
+    indexToDelete = []
     for idx, row in testData.iterrows():
+
         indexInDatabase = int(list(database.index).index(idx))
 
         filteredHomeDatabase = database.reset_index()[(database.reset_index().home == idx[1])]# | (database.reset_index().away == idx[1])]
@@ -27,8 +29,12 @@ def createTestSetLocation(database, testData, preGameCount):
         awayValue = filteredAwayDatabase.index.get_loc(indexInDatabase)
         pastAwayGames = filteredAwayDatabase.iloc[awayValue - preGameCount:awayValue]
 
-        # b = database[(database.home=='New England Patriots') | (database.away == 'New England Patriots')]
-        # pd.concat([database.loc[90,'New England Patriots',:],database.loc[90,:,'New England Patriots']]).reset_index()
+        if len(pastHomeGames) != preGameCount or len(pastAwayGames) != preGameCount:
+            print("Error: No previous games found for game {}. Game is being deleted...".format(idx))
+            indexToDelete.append(idx)
+            continue
+            # b = database[(database.home=='New England Patriots') | (database.away == 'New England Patriots')]
+            # pd.concat([database.loc[90,'New England Patriots',:],database.loc[90,:,'New England Patriots']]).reset_index()
 
         for stat, val in row.iteritems():
             if 'CurrWin' in stat or 'spread' in stat:
@@ -38,12 +44,11 @@ def createTestSetLocation(database, testData, preGameCount):
                 testData.at[idx, stat] = pastHomeGames[stat].mean()
             elif 'away' in stat:
                 testData.at[idx, stat] = pastAwayGames[stat].mean()
+    testData = testData.drop(indexToDelete)
     return testData
 
 def createTestSetPrevious(database, testData, preGameCount):
     for idx, row in testData.iterrows():
-
-
         indexInDatabase = int(list(database.index).index(idx))
 
         filteredHomeDatabase = database.reset_index()[(database.reset_index().home == idx[1]) | (database.reset_index().away == idx[1])]
@@ -64,7 +69,6 @@ def createTestSetPrevious(database, testData, preGameCount):
             elif 'away' in stat:
                 testData.at[idx, stat] = pastAwayGames[stat].mean()
     return testData
-
 
 def pickleTestSet(preGameCount, testYears):
     ######################## SETUP STAGE ########################
@@ -116,4 +120,50 @@ def pickleTestSet(preGameCount, testYears):
         outfile = open("./Pickled_Test_Data/{0}_test_data_pgc_{1}.pkl".format(year, preGameCount), 'wb')
         pickle.dump(testData, outfile)
         outfile.close()
+
+def loadPickledFiles(years, preGameCount):
+    database = pd.DataFrame()
+
+    for year in range(years[0],years[1]+1):
+        for file in os.listdir('./Pickled_Test_Data'):
+            if file == "{}_test_data_pgc_{}.pkl".format(year, preGameCount):
+                data = pickle.load(open('./Pickled_Test_Data/{}'.format(file), 'rb'))
+                database = database.append(data)
+                break
+
+    return database
+
+def oldPlotMethod():
+    pass
+    #     axs[0].plot(error, label='Model #' + str(t+1))
+    #     axs[0].set_xlabel('Epochs')
+    #     axs[0].set_ylabel('Training Accuracy')
+    #
+    #     axs[1].scatter(t+1, accuracy, label='Model #' + str(t+1))
+    #     axs[1].set_xlabel('Model #')
+    #     axs[1].set_ylabel('Test Accuracy')
+    #
+    #
+    #     # testAccuracy.append(accuracy)
+    #     print('Accuracy of the network on test set: Games from {0}-{1}: {2}%'.format(testStartYear, testEndYear, accuracy))
+    #
+    #
+    # axs[0].legend(loc='upper left', bbox_to_anchor=(1.01, 1))
+    # axs[1].legend(loc='upper left', bbox_to_anchor=(1.01, 1))
+    #
+    # axs[0].title.set_text('Training accuracy for different models (Games from {0}-{1})'.format(trainStartYear, trainEndYear))
+    # axs[1].title.set_text('Test accuracy for different models (Games from {0}-{1})'.format(testStartYear, testEndYear))
+    #
+    # axs[1].set_xticks(range(1, t+2))
+
+    # plt.tight_layout()
+    # plt.savefig('Multiple Taining Experiment')
+
+if __name__ == '__main__':
+    print('finding')
+    pickleTestSet(3, (1990, 2001))
+    # database = loadPickledFiles((2006, 2019), 3)
+    print('done')
+    # print(database)
+    pass
 
