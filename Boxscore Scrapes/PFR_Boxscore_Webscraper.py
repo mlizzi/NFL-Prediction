@@ -331,6 +331,11 @@ def postProcessColumns(masterDF):
 
 	ppCSV.columns = ppCSV.columns.str.replace(' ', '')
 
+
+	# make spread relative to home team
+	ppCSV['spread'] = np.where(ppCSV['home'] == ppCSV['favouredTeam'], ppCSV['spread'].astype(float), -ppCSV['spread'].astype(float))
+	ppCSV = ppCSV.drop('favouredTeam', axis=1)
+
 	# Make yard differential column
 	ppCSV['NetPassYardsDifferential'] = ppCSV['homeNetPassYards'].astype(float) - ppCSV['awayNetPassYards'].astype(float)
 	ppCSV['TotalYardsDifferential'] = ppCSV['homeTotalYards'].astype(float) - ppCSV['awayTotalYards'].astype(float)
