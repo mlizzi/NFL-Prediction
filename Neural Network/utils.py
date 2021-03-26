@@ -121,6 +121,14 @@ def pickleTestSet(preGameCount, testYears):
         pickle.dump(testData, outfile)
         outfile.close()
 
+def pickleResults(resultsDict, modelFolder, modelNumber):
+
+    for key, value in resultsDict.items():
+        outfile = open("./{0}/{1}{2}.pkl".format(modelFolder, key, modelNumber), 'wb')
+        pickle.dump(value, outfile)
+        outfile.close()
+
+
 def loadPickledFiles(years, preGameCount):
     database = pd.DataFrame()
 
@@ -161,7 +169,7 @@ def oldPlotMethod():
 
 if __name__ == '__main__':
     print('finding')
-    pickleTestSet(3, (1990, 2001))
+    # pickleTestSet(3, (1971, 2000))
     # database = loadPickledFiles((2006, 2019), 3)
     print('done')
     # print(database)
